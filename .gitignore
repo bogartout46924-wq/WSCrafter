@@ -1,0 +1,11 @@
+# Build outputs
+bin/
+obj/
+
+# Local settings and config
+config/
+
+# IDE files
+.vs/
+*.user
+*.suo
