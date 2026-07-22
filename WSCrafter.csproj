@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Version>0.1.1</Version>
+    <AssemblyVersion>0.1.1.0</AssemblyVersion>
+    <FileVersion>0.1.1.0</FileVersion>
     <OutputType>Library</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
@@ -11,16 +14,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <Content Include="Localization\**\*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Localization\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\GameHelper2\GameHelper\GameHelper.csproj">
-      <Private>false</Private>
-      <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
-    </ProjectReference>
-    <ProjectReference Include="..\GameHelper2\GameOffsets\GameOffsets.csproj">
+    <ProjectReference Include="$(GameHelperCoreDir)\GameHelper\GameHelper.csproj">
       <Private>false</Private>
       <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
     </ProjectReference>
@@ -28,12 +29,17 @@
 
   <Target Name="CopyFiles" AfterTargets="Build">
     <ItemGroup>
-      <_WSCrafterDeployFiles Include="$(OutDir)$(TargetName)$(TargetExt);$(OutDir)$(TargetName).pdb" />
+      <_WSCrafterDeployFiles Include="$(OutDir)$(TargetName)$(TargetExt)" />
+      <_WSCrafterDeployFiles Include="$(OutDir)$(TargetName).pdb" Condition="Exists('$(OutDir)$(TargetName).pdb')" />
+      <_WSCrafterLocalizationFiles Include="$(OutDir)Localization\**\*.json" />
     </ItemGroup>
     <Copy SourceFiles="@(_WSCrafterDeployFiles)"
-          DestinationFolder="..\GameHelper2\GameHelper\$(OutDir)Plugins\$(ProjectName)"
+          DestinationFolder="$(GameHelperPluginDeployDir)"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_WSCrafterLocalizationFiles)"
+          DestinationFolder="$(GameHelperPluginDeployDir)\Localization\%(RecursiveDir)"
           SkipUnchangedFiles="true"
-          Condition="Exists('..\GameHelper2\GameHelper\$(OutDir)')" />
+          Condition="'@(_WSCrafterLocalizationFiles)' != ''" />
   </Target>
 
 </Project>

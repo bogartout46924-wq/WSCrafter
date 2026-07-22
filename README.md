@@ -1,20 +1,37 @@
 # WSCrafter
 
-WSCrafter is a GameHelper plugin for Path of Exile 2 waystone crafting.
+GameHelper / VaalHub plugin for Path of Exile 2 waystone crafting automation.
 
-It helps locate crafting currency, plan selected inventory slots, and automate the basic waystone crafting flow:
+Fork of [Ionic28/WSCrafter](https://github.com/Ionic28/WSCrafter), adapted for this workspace and localized for VaalHub.
 
-- Use Orb of Alchemy on normal or magic waystones.
-- Use Exalted Orbs on rare waystones until the target explicit mod count is reached.
-- Use a Vaal Orb as the final step.
-- Skip waystones that have already had a Vaal attempt during the current run.
+## Features
 
-## Development
+- Select inventory slots and plan waystone crafting
+- Alchemy maps below rare
+- Exalt rare waystones to a target explicit mod count
+- Optional final Vaal step
+- Overlay highlights, emergency stop key, and debug tools
+- 11-language UI localization
 
-Place this repository under `Plugins/WSCrafter` inside a GameHelper checkout, then build:
+## Display names
+
+| Language | Name |
+|---|---|
+| English | Waystone Crafter |
+| 繁體中文 | 換界石制作 |
+| 简体中文 | 引路石制作 |
+
+Waystone terms follow [poe2db](https://poe2db.tw/tw/Waystones) language pages where available.
+
+## Build
+
+From the workspace root:
 
 ```powershell
-dotnet build .\Plugins\WSCrafter\WSCrafter.csproj -c Release --no-restore
+dotnet build .\plugins\WSCrafter\WSCrafter.csproj -c Release -p:GameHelperCoreDir="$PWD\VaalHub"
 ```
 
-The project references `GameHelper` and `GameOffsets` from the parent checkout.
+## Credits
+
+- Original plugin: **Ionic28**
+- VaalHub fork / localization: workspace maintainers

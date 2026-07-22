@@ -82,6 +82,7 @@ namespace WSCrafter
 
         public override void OnEnable(bool isGameOpened)
         {
+            VaalHubPluginGuard.EnsureHost();
             if (File.Exists(this.SettingPathname))
             {
                 try
@@ -97,6 +98,9 @@ namespace WSCrafter
 
             this.NormalizeSettings();
             this.InitReflection();
+            this.automationStatus = this.PluginText.T("status.idle", "Idle.");
+            this.latestStatus = this.PluginText.T("status.waiting_stash_inventory", "Waiting for stash/inventory UI.");
+            this.latestMemoryScanStatus = this.PluginText.T("debug.no_memory_scan_yet", "No memory scan yet.");
         }
 
         public override void OnDisable()
@@ -112,7 +116,7 @@ namespace WSCrafter
             this.latestCraftingSlots.Clear();
             this.latestCurrencies.Clear();
             this.latestCurrencyCandidates.Clear();
-            this.StopAutomation("Disabled.");
+            this.StopAutomation(this.PluginText.T("status.disabled", "Disabled."));
         }
 
         public override void SaveSettings()
@@ -133,53 +137,53 @@ namespace WSCrafter
             this.NormalizeSettings();
 
             var changed = false;
-            changed |= ImGui.Checkbox("Enable overlay", ref this.Settings.EnableOverlay);
-            changed |= ImGui.Checkbox("Highlight inventory waystones", ref this.Settings.ShowInventoryHighlights);
-            changed |= ImGui.Checkbox("Highlight located currency", ref this.Settings.ShowCurrencyHighlights);
-            changed |= ImGui.Checkbox("Show debug info", ref this.Settings.ShowDebugInfo);
+            changed |= ImGui.Checkbox(this.PluginText.Label("settings.enable_overlay", "Enable overlay", "WSCrafterEnableOverlay"), ref this.Settings.EnableOverlay);
+            changed |= ImGui.Checkbox(this.PluginText.Label("settings.highlight_waystones", "Highlight inventory waystones", "WSCrafterHighlightWaystones"), ref this.Settings.ShowInventoryHighlights);
+            changed |= ImGui.Checkbox(this.PluginText.Label("settings.highlight_currency", "Highlight located currency", "WSCrafterHighlightCurrency"), ref this.Settings.ShowCurrencyHighlights);
+            changed |= ImGui.Checkbox(this.PluginText.Label("settings.show_debug", "Show debug info", "WSCrafterShowDebug"), ref this.Settings.ShowDebugInfo);
 
-            ImGui.SeparatorText("Crafting Plan");
-            changed |= ImGui.Checkbox("Alchemy maps below rare", ref this.Settings.ApplyAlchemyToNormalMaps);
-            changed |= ImGui.Checkbox("Exalt rare maps to target mod count", ref this.Settings.ApplyExaltedToRareMaps);
-            changed |= ImGui.Checkbox("Vaal as final step", ref this.Settings.ApplyVaalAsFinalStep);
-            changed |= ImGui.SliderInt("Target explicit mods", ref this.Settings.TargetExplicitMods, 1, 6);
+            ImGui.SeparatorText(this.PluginText.T("section.crafting_plan", "Crafting Plan"));
+            changed |= ImGui.Checkbox(this.PluginText.Label("settings.alchemy_below_rare", "Alchemy maps below rare", "WSCrafterAlchemyBelowRare"), ref this.Settings.ApplyAlchemyToNormalMaps);
+            changed |= ImGui.Checkbox(this.PluginText.Label("settings.exalt_to_target", "Exalt rare maps to target mod count", "WSCrafterExaltToTarget"), ref this.Settings.ApplyExaltedToRareMaps);
+            changed |= ImGui.Checkbox(this.PluginText.Label("settings.vaal_final", "Vaal as final step", "WSCrafterVaalFinal"), ref this.Settings.ApplyVaalAsFinalStep);
+            changed |= ImGui.SliderInt(this.PluginText.Label("settings.target_explicit_mods", "Target explicit mods", "WSCrafterTargetMods"), ref this.Settings.TargetExplicitMods, 1, 6);
 
-            ImGui.SeparatorText("Automation");
-            changed |= ImGui.SliderFloat("Start delay (sec)", ref this.Settings.AutomationStartDelaySeconds, 0.5f, 5f, "%.1f");
-            changed |= ImGui.SliderInt("Click delay (ms)", ref this.Settings.AutomationClickDelayMs, 50, 500);
-            changed |= ImGui.SliderInt("Step delay (ms)", ref this.Settings.AutomationStepDelayMs, 150, 1500);
-            changed |= ImGui.SliderInt("Item update timeout (ms)", ref this.Settings.AutomationItemUpdateTimeoutMs, 500, 5000);
-            changed |= ImGuiHelper.NonContinuousEnumComboBox("Emergency stop key", ref this.Settings.AutomationAbortKey);
+            ImGui.SeparatorText(this.PluginText.T("section.automation", "Automation"));
+            changed |= ImGui.SliderFloat(this.PluginText.Label("settings.start_delay", "Start delay (sec)", "WSCrafterStartDelay"), ref this.Settings.AutomationStartDelaySeconds, 0.5f, 5f, "%.1f");
+            changed |= ImGui.SliderInt(this.PluginText.Label("settings.click_delay", "Click delay (ms)", "WSCrafterClickDelay"), ref this.Settings.AutomationClickDelayMs, 50, 500);
+            changed |= ImGui.SliderInt(this.PluginText.Label("settings.step_delay", "Step delay (ms)", "WSCrafterStepDelay"), ref this.Settings.AutomationStepDelayMs, 150, 1500);
+            changed |= ImGui.SliderInt(this.PluginText.Label("settings.item_update_timeout", "Item update timeout (ms)", "WSCrafterItemTimeout"), ref this.Settings.AutomationItemUpdateTimeoutMs, 500, 5000);
+            changed |= ImGuiHelper.NonContinuousEnumComboBox(this.PluginText.T("settings.emergency_stop_key", "Emergency stop key"), ref this.Settings.AutomationAbortKey);
             if (!this.automationActive)
             {
-                if (ImGui.Button("Start crafting selected waystones"))
+                if (ImGui.Button(this.PluginText.Label("button.start_crafting", "Start crafting selected waystones", "WSCrafterStartCraft")))
                 {
                     this.StartAutomation();
                 }
             }
-            else if (ImGui.Button("Stop crafting"))
+            else if (ImGui.Button(this.PluginText.Label("button.stop_crafting", "Stop crafting", "WSCrafterStopCraft")))
             {
-                this.StopAutomation("Stopped by user.");
+                this.StopAutomation(this.PluginText.T("status.stopped_user", "Stopped by user."));
             }
 
             ImGui.SameLine();
-            if (ImGui.Button("Kill automation now"))
+            if (ImGui.Button(this.PluginText.Label("button.kill_automation", "Kill automation now", "WSCrafterKillCraft")))
             {
-                this.StopAutomation("Killed by user.");
+                this.StopAutomation(this.PluginText.T("status.killed_user", "Killed by user."));
             }
 
-            ImGui.TextWrapped($"Automation: {this.automationStatus}");
+            ImGui.TextWrapped(this.PluginText.F("status.automation_line", "Automation: {0}", this.automationStatus));
 
-            ImGui.SeparatorText("Inventory Slots");
+            ImGui.SeparatorText(this.PluginText.T("section.inventory_slots", "Inventory Slots"));
             changed |= this.DrawSelectionControls();
             changed |= this.DrawSelectionGrid(interactive: true);
 
-            ImGui.SeparatorText("Colors");
-            changed |= ImGui.ColorEdit4("Missing currency", ref this.Settings.MissingMapColor);
-            changed |= ImGui.ColorEdit4("Pending craft", ref this.Settings.PendingCraftColor);
-            changed |= ImGui.ColorEdit4("Ready map", ref this.Settings.ReadyMapColor);
-            changed |= ImGui.ColorEdit4("Currency", ref this.Settings.CurrencyColor);
-            changed |= ImGui.SliderFloat("Border thickness", ref this.Settings.BorderThickness, 1f, 8f, "%.1f");
+            ImGui.SeparatorText(this.PluginText.T("section.colors", "Colors"));
+            changed |= ImGui.ColorEdit4(this.PluginText.T("color.missing_currency", "Missing currency"), ref this.Settings.MissingMapColor);
+            changed |= ImGui.ColorEdit4(this.PluginText.T("color.pending_craft", "Pending craft"), ref this.Settings.PendingCraftColor);
+            changed |= ImGui.ColorEdit4(this.PluginText.T("color.ready_map", "Ready map"), ref this.Settings.ReadyMapColor);
+            changed |= ImGui.ColorEdit4(this.PluginText.T("color.currency", "Currency"), ref this.Settings.CurrencyColor);
+            changed |= ImGui.SliderFloat(this.PluginText.Label("settings.border_thickness", "Border thickness", "WSCrafterBorderThickness"), ref this.Settings.BorderThickness, 1f, 8f, "%.1f");
 
             if (changed)
             {
@@ -196,7 +200,7 @@ namespace WSCrafter
 
             if (this.automationActive && NativeMouse.IsKeyDown((int)this.Settings.AutomationAbortKey))
             {
-                this.StopAutomation($"Emergency stopped by {this.Settings.AutomationAbortKey}.");
+                this.StopAutomation(this.PluginText.F("status.emergency_stopped", "Emergency stopped by {0}.", this.Settings.AutomationAbortKey));
             }
 
             if (Core.States.GameCurrentState != GameStateTypes.InGameState)
@@ -241,7 +245,7 @@ namespace WSCrafter
             this.latestCraftingSlots.Clear();
             this.latestCurrencies.Clear();
             this.latestCurrencyCandidates.Clear();
-            this.latestStatus = "Open your currency stash tab and inventory.";
+            this.latestStatus = this.PluginText.T("status.open_currency_and_inventory", "Open your currency stash tab and inventory.");
             this.latestGameUiAddress = IntPtr.Zero;
             this.latestLeftPanelAddress = IntPtr.Zero;
             this.latestRightPanelAddress = IntPtr.Zero;
@@ -289,7 +293,7 @@ namespace WSCrafter
                         }
                     }
 
-                    this.latestStatus = $"Inventory grid found. Selected waystones: {this.latestCraftingSlots.Count}.";
+                    this.latestStatus = this.PluginText.F("status.inventory_grid_found", "Inventory grid found. Selected waystones: {0}.", this.latestCraftingSlots.Count);
                 }
             }
         }
@@ -407,36 +411,40 @@ namespace WSCrafter
             }
 
             var state = CraftingState.Ready;
-            var nextStep = "Ready";
+            var nextStep = this.PluginText.T("craft.ready", "Ready");
             CurrencyKind? neededCurrency = null;
 
             if (this.IsCraftingComplete(slot))
             {
-                nextStep = "Already corrupted";
+                nextStep = this.PluginText.T("craft.already_corrupted", "Already corrupted");
             }
             else if (slot.Index >= 0 && this.vaalAttemptedSlotIndexes.Contains(slot.Index))
             {
-                nextStep = "Vaal attempted";
+                nextStep = this.PluginText.T("craft.vaal_attempted", "Vaal attempted");
             }
             else if (this.Settings.ApplyAlchemyToNormalMaps && IsBelowRare(rarity))
             {
                 neededCurrency = CurrencyKind.Alchemy;
                 state = this.latestCurrencies.ContainsKey(CurrencyKind.Alchemy) ? CraftingState.NeedsAlchemy : CraftingState.MissingCurrency;
-                nextStep = this.latestCurrencies.ContainsKey(CurrencyKind.Alchemy) ? "Use Orb of Alchemy" : "Missing Orb of Alchemy";
+                nextStep = this.latestCurrencies.ContainsKey(CurrencyKind.Alchemy)
+                    ? this.PluginText.T("craft.use_alchemy", "Use Orb of Alchemy")
+                    : this.PluginText.T("craft.missing_alchemy", "Missing Orb of Alchemy");
             }
             else if (this.Settings.ApplyExaltedToRareMaps && rarity == Rarity.Rare && explicitMods < this.Settings.TargetExplicitMods)
             {
                 neededCurrency = CurrencyKind.Exalted;
                 state = this.latestCurrencies.ContainsKey(CurrencyKind.Exalted) ? CraftingState.NeedsExalted : CraftingState.MissingCurrency;
                 nextStep = this.latestCurrencies.ContainsKey(CurrencyKind.Exalted)
-                    ? $"Use Exalted Orb ({explicitMods}/{this.Settings.TargetExplicitMods} explicit)"
-                    : "Missing Exalted Orb";
+                    ? this.PluginText.F("craft.use_exalted", "Use Exalted Orb ({0}/{1} explicit)", explicitMods, this.Settings.TargetExplicitMods)
+                    : this.PluginText.T("craft.missing_exalted", "Missing Exalted Orb");
             }
             else if (this.Settings.ApplyVaalAsFinalStep)
             {
                 neededCurrency = CurrencyKind.Vaal;
                 state = this.latestCurrencies.ContainsKey(CurrencyKind.Vaal) ? CraftingState.NeedsVaal : CraftingState.MissingCurrency;
-                nextStep = this.latestCurrencies.ContainsKey(CurrencyKind.Vaal) ? "Use Vaal Orb" : "Missing Vaal Orb";
+                nextStep = this.latestCurrencies.ContainsKey(CurrencyKind.Vaal)
+                    ? this.PluginText.T("craft.use_vaal", "Use Vaal Orb")
+                    : this.PluginText.T("craft.missing_vaal", "Missing Vaal Orb");
             }
 
             return new CraftingSlot(slot, name, rarity, explicitMods, state, nextStep, neededCurrency);
@@ -452,7 +460,7 @@ namespace WSCrafter
             this.nextAutomationActionAt = DateTime.Now.AddSeconds(this.Settings.AutomationStartDelaySeconds);
             this.HideSettingsWindow();
             NativeMouse.FocusWindow(this.TryGetGameWindowHandle());
-            this.automationStatus = $"Starting in {this.Settings.AutomationStartDelaySeconds:0.0}s. Focus the game window. Emergency stop: {this.Settings.AutomationAbortKey}.";
+            this.automationStatus = this.PluginText.F("status.starting", "Starting in {0:0.0}s. Focus the game window. Emergency stop: {1}.", this.Settings.AutomationStartDelaySeconds, this.Settings.AutomationAbortKey);
         }
 
         private void StopAutomation(string reason)
@@ -476,7 +484,7 @@ namespace WSCrafter
                 var remaining = Math.Max(0, (this.nextAutomationActionAt - now).TotalSeconds);
                 if (this.automationPhase == AutomationPhase.PrepareStep && this.automationActionsSent == 0)
                 {
-                    this.automationStatus = $"Starting in {remaining:0.0}s. Focus the game window. Emergency stop: {this.Settings.AutomationAbortKey}.";
+                    this.automationStatus = this.PluginText.F("status.starting", "Starting in {0:0.0}s. Focus the game window. Emergency stop: {1}.", remaining, this.Settings.AutomationAbortKey);
                 }
 
                 return;
@@ -504,7 +512,7 @@ namespace WSCrafter
 
                 case AutomationPhase.RightClickCurrency:
                     NativeMouse.RightClick(this.pendingCurrencyCenter);
-                    this.automationStatus = $"Selected {this.pendingCurrencyKind}.";
+                    this.automationStatus = this.PluginText.F("status.selected_currency", "Selected {0}.", this.LocalizeCurrencyKind(this.pendingCurrencyKind));
                     this.forceCurrencyRescan = true;
                     this.automationPhase = AutomationPhase.LeftClickWaystone;
                     this.nextAutomationActionAt = now.AddMilliseconds(this.Settings.AutomationClickDelayMs);
@@ -513,7 +521,7 @@ namespace WSCrafter
                 case AutomationPhase.LeftClickWaystone:
                     NativeMouse.LeftClick(this.pendingWaystoneCenter);
                     this.automationActionsSent++;
-                    this.automationStatus = $"Applied {this.pendingCurrencyKind}. Waiting for item update...";
+                    this.automationStatus = this.PluginText.F("status.applied_waiting", "Applied {0}. Waiting for item update...", this.LocalizeCurrencyKind(this.pendingCurrencyKind));
                     this.automationPhase = AutomationPhase.WaitForItemUpdate;
                     this.pendingItemUpdateDeadline = now.AddMilliseconds(this.Settings.AutomationItemUpdateTimeoutMs);
                     this.nextAutomationActionAt = now.AddMilliseconds(this.Settings.AutomationStepDelayMs);
@@ -522,7 +530,7 @@ namespace WSCrafter
                 case AutomationPhase.WaitForItemUpdate:
                     if (this.IsPendingItemUpdateObserved())
                     {
-                        this.automationStatus = $"{this.pendingCurrencyKind} confirmed on slot {this.pendingWaystoneColumn},{this.pendingWaystoneRow}.";
+                        this.automationStatus = this.PluginText.F("status.confirmed", "{0} confirmed on slot {1},{2}.", this.LocalizeCurrencyKind(this.pendingCurrencyKind), this.pendingWaystoneColumn, this.pendingWaystoneRow);
                         this.automationPhase = AutomationPhase.PrepareStep;
                         this.nextAutomationActionAt = now.AddMilliseconds(75);
                     }
@@ -531,11 +539,11 @@ namespace WSCrafter
                         if (this.pendingCurrencyKind == CurrencyKind.Vaal && this.pendingWaystoneSlotIndex >= 0)
                         {
                             this.vaalAttemptedSlotIndexes.Add(this.pendingWaystoneSlotIndex);
-                            this.automationStatus = $"No Vaal result observed on slot {this.pendingWaystoneColumn},{this.pendingWaystoneRow}; skipping further Vaal attempts this run.";
+                            this.automationStatus = this.PluginText.F("status.no_vaal_result", "No Vaal result observed on slot {0},{1}; skipping further Vaal attempts this run.", this.pendingWaystoneColumn, this.pendingWaystoneRow);
                         }
                         else
                         {
-                            this.automationStatus = $"No {this.pendingCurrencyKind} result observed on slot {this.pendingWaystoneColumn},{this.pendingWaystoneRow}; retrying.";
+                            this.automationStatus = this.PluginText.F("status.no_result_retry", "No {0} result observed on slot {1},{2}; retrying.", this.LocalizeCurrencyKind(this.pendingCurrencyKind), this.pendingWaystoneColumn, this.pendingWaystoneRow);
                         }
 
                         this.automationPhase = AutomationPhase.PrepareStep;
@@ -543,7 +551,7 @@ namespace WSCrafter
                     }
                     else
                     {
-                        this.automationStatus = $"Waiting for {this.pendingCurrencyKind} result on slot {this.pendingWaystoneColumn},{this.pendingWaystoneRow}...";
+                        this.automationStatus = this.PluginText.F("status.waiting_result", "Waiting for {0} result on slot {1},{2}...", this.LocalizeCurrencyKind(this.pendingCurrencyKind), this.pendingWaystoneColumn, this.pendingWaystoneRow);
                         this.nextAutomationActionAt = now.AddMilliseconds(100);
                     }
 
@@ -555,32 +563,32 @@ namespace WSCrafter
         {
             if (Core.States.GameCurrentState != GameStateTypes.InGameState)
             {
-                reason = "Waiting: game is not in-game.";
+                reason = this.PluginText.T("status.waiting_not_ingame", "Waiting: game is not in-game.");
                 return false;
             }
 
             if (!Core.Process.Foreground)
             {
-                reason = "Waiting: focus the Path of Exile window.";
+                reason = this.PluginText.T("status.waiting_focus", "Waiting: focus the Path of Exile window.");
                 return false;
             }
 
             var gameUi = Core.States.InGameStateObject.GameUi;
             if (gameUi == null || gameUi.Address == IntPtr.Zero)
             {
-                reason = "Waiting: game UI is not ready.";
+                reason = this.PluginText.T("status.waiting_game_ui", "Waiting: game UI is not ready.");
                 return false;
             }
 
             if (gameUi.ChatParent.IsChatActive)
             {
-                reason = "Waiting: chat is active.";
+                reason = this.PluginText.T("status.waiting_chat", "Waiting: chat is active.");
                 return false;
             }
 
             if (this.latestInventoryGridRoot == IntPtr.Zero)
             {
-                reason = "Waiting: inventory grid is not visible.";
+                reason = this.PluginText.T("status.waiting_inventory_grid", "Waiting: inventory grid is not visible.");
                 return false;
             }
 
@@ -632,20 +640,20 @@ namespace WSCrafter
 
             if (target == null)
             {
-                reason = $"Complete. Sent {this.automationActionsSent} craft action(s).";
+                reason = this.PluginText.F("status.complete", "Complete. Sent {0} craft action(s).", this.automationActionsSent);
                 return false;
             }
 
             var currencyKind = target.NeededCurrency!.Value;
             if (!this.latestCurrencies.TryGetValue(currencyKind, out var currencySlot))
             {
-                reason = $"Stopped: {currencyKind} is not visible.";
+                reason = this.PluginText.F("status.currency_not_visible", "Stopped: {0} is not visible.", this.LocalizeCurrencyKind(currencyKind));
                 return false;
             }
 
             if (target.State == CraftingState.MissingCurrency)
             {
-                reason = $"Stopped: {target.NextStep}.";
+                reason = this.PluginText.F("status.stopped_next", "Stopped: {0}.", target.NextStep);
                 return false;
             }
 
@@ -657,7 +665,7 @@ namespace WSCrafter
             this.pendingWaystoneRow = target.Slot.Row;
             this.pendingWaystoneRarity = target.Rarity;
             this.pendingWaystoneExplicitMods = target.ExplicitMods;
-            this.automationStatus = $"{target.NextStep} on slot {target.Slot.Column},{target.Slot.Row}.";
+            this.automationStatus = this.PluginText.F("status.next_step_on_slot", "{0} on slot {1},{2}.", target.NextStep, target.Slot.Column, target.Slot.Row);
             reason = string.Empty;
             return true;
         }
@@ -688,50 +696,50 @@ namespace WSCrafter
         private void DrawDebugWindow()
         {
             ImGui.SetNextWindowSize(new Vector2(660f, 520f), ImGuiCond.FirstUseEver);
-            ImGui.Begin("WSCrafter Debugger");
+            ImGui.Begin(this.PluginText.Title("window.debugger", "WSCrafter Debugger", "WSCrafterDebugger"));
 
-            ImGui.Text($"Game State: {Core.States.GameCurrentState}");
-            ImGui.Text($"Handle ready: {this.handleObj != null}");
-            ImGui.Text($"GameUi: 0x{this.latestGameUiAddress.ToInt64():X}");
-            ImGui.Text($"LeftPanel: 0x{this.latestLeftPanelAddress.ToInt64():X} | Visible: {this.latestLeftPanelVisible} | Items scanned: {this.latestLeftPanelItemsScanned}");
-            ImGui.Text($"RightPanel: 0x{this.latestRightPanelAddress.ToInt64():X} | Visible: {this.latestRightPanelVisible} | Items scanned: {this.latestRightPanelItemsScanned}");
-            ImGui.Text($"InventoryGridRoot: 0x{this.latestInventoryGridRoot.ToInt64():X}");
-            ImGui.Text($"Planner status: {this.latestStatus}");
+            ImGui.Text(this.PluginText.F("debug.game_state", "Game State: {0}", Core.States.GameCurrentState));
+            ImGui.Text(this.PluginText.F("debug.handle_ready", "Handle ready: {0}", this.handleObj != null));
+            ImGui.Text(this.PluginText.F("debug.game_ui", "GameUi: 0x{0:X}", this.latestGameUiAddress.ToInt64()));
+            ImGui.Text(this.PluginText.F("debug.left_panel", "LeftPanel: 0x{0:X} | Visible: {1} | Items scanned: {2}", this.latestLeftPanelAddress.ToInt64(), this.latestLeftPanelVisible, this.latestLeftPanelItemsScanned));
+            ImGui.Text(this.PluginText.F("debug.right_panel", "RightPanel: 0x{0:X} | Visible: {1} | Items scanned: {2}", this.latestRightPanelAddress.ToInt64(), this.latestRightPanelVisible, this.latestRightPanelItemsScanned));
+            ImGui.Text(this.PluginText.F("debug.inventory_grid", "InventoryGridRoot: 0x{0:X}", this.latestInventoryGridRoot.ToInt64()));
+            ImGui.Text(this.PluginText.F("debug.planner_status", "Planner status: {0}", this.latestStatus));
 
-            ImGui.SeparatorText("Target Currency Detection");
-            this.DrawDebugCurrencyTarget(CurrencyKind.Alchemy, "Orb of Alchemy");
-            this.DrawDebugCurrencyTarget(CurrencyKind.Exalted, "Exalted Orb");
-            this.DrawDebugCurrencyTarget(CurrencyKind.Vaal, "Vaal Orb");
+            ImGui.SeparatorText(this.PluginText.T("debug.target_currency", "Target Currency Detection"));
+            this.DrawDebugCurrencyTarget(CurrencyKind.Alchemy, this.PluginText.T("currency.alchemy", "Alchemy"));
+            this.DrawDebugCurrencyTarget(CurrencyKind.Exalted, this.PluginText.T("currency.exalted", "Exalted"));
+            this.DrawDebugCurrencyTarget(CurrencyKind.Vaal, this.PluginText.T("currency.vaal", "Vaal"));
 
-            ImGui.SeparatorText($"Selected Waystones ({this.latestCraftingSlots.Count})");
+            ImGui.SeparatorText(this.PluginText.F("debug.selected_waystones", "Selected Waystones ({0})", this.latestCraftingSlots.Count));
             this.DrawDebugWaystoneTable();
 
-            ImGui.SeparatorText("Waystone Memory Scanner");
-            ImGui.TextWrapped("Dump the currently visible selected waystones. Put a corrupted and clean waystone in selected slots, then compare their blocks in the output file.");
-            if (ImGui.Button("Dump visible waystone memory scan"))
+            ImGui.SeparatorText(this.PluginText.T("debug.waystone_scanner", "Waystone Memory Scanner"));
+            ImGui.TextWrapped(this.PluginText.T("debug.waystone_scanner_help", "Dump the currently visible selected waystones. Put a corrupted and clean waystone in selected slots, then compare their blocks in the output file."));
+            if (ImGui.Button(this.PluginText.Label("debug.dump_memory", "Dump visible waystone memory scan", "WSCrafterDumpMemory")))
             {
                 this.DumpVisibleWaystoneMemoryScan();
             }
 
             ImGui.TextWrapped(this.latestMemoryScanStatus);
 
-            ImGui.SeparatorText($"Currency Candidates ({this.latestCurrencyCandidates.Count})");
+            ImGui.SeparatorText(this.PluginText.F("debug.currency_candidates", "Currency Candidates ({0})", this.latestCurrencyCandidates.Count));
             if (this.latestCurrencyCandidates.Count == 0)
             {
-                ImGui.TextWrapped("No target or currency-like items were detected in the visible left/right panels. Open the currency tab and make sure the stash/inventory panels are visible.");
+                ImGui.TextWrapped(this.PluginText.T("debug.no_currency_candidates", "No target or currency-like items were detected in the visible left/right panels. Open the currency tab and make sure the stash/inventory panels are visible."));
                 ImGui.End();
                 return;
             }
 
             if (ImGui.BeginTable("WSCrafterCurrencyDebugTable", 7, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | ImGuiTableFlags.ScrollY, new Vector2(0f, 260f)))
             {
-                ImGui.TableSetupColumn("Kind");
-                ImGui.TableSetupColumn("Match");
-                ImGui.TableSetupColumn("Name");
-                ImGui.TableSetupColumn("Path");
-                ImGui.TableSetupColumn("Ptr");
-                ImGui.TableSetupColumn("Pos");
-                ImGui.TableSetupColumn("Size");
+                ImGui.TableSetupColumn(this.PluginText.T("debug.col.kind", "Kind"));
+                ImGui.TableSetupColumn(this.PluginText.T("debug.col.match", "Match"));
+                ImGui.TableSetupColumn(this.PluginText.T("debug.col.name", "Name"));
+                ImGui.TableSetupColumn(this.PluginText.T("debug.col.path", "Path"));
+                ImGui.TableSetupColumn(this.PluginText.T("debug.col.ptr", "Ptr"));
+                ImGui.TableSetupColumn(this.PluginText.T("debug.col.pos", "Pos"));
+                ImGui.TableSetupColumn(this.PluginText.T("debug.col.size", "Size"));
                 ImGui.TableHeadersRow();
 
                 foreach (var candidate in this.latestCurrencyCandidates.Take(100))
@@ -740,7 +748,7 @@ namespace WSCrafter
                     ImGui.TableNextColumn();
                     ImGui.TextUnformatted(candidate.Kind);
                     ImGui.TableNextColumn();
-                    ImGui.TextColored(candidate.IsTargetMatch ? new Vector4(0.35f, 1f, 0.35f, 1f) : new Vector4(1f, 0.75f, 0.25f, 1f), candidate.IsTargetMatch ? "yes" : "no");
+                    ImGui.TextColored(candidate.IsTargetMatch ? new Vector4(0.35f, 1f, 0.35f, 1f) : new Vector4(1f, 0.75f, 0.25f, 1f), candidate.IsTargetMatch ? this.PluginText.T("debug.match_yes", "yes") : this.PluginText.T("debug.match_no", "no"));
                     ImGui.TableNextColumn();
                     ImGui.TextUnformatted(candidate.Name);
                     ImGui.TableNextColumn();
@@ -758,7 +766,7 @@ namespace WSCrafter
 
             if (this.latestCurrencyCandidates.Count > 100)
             {
-                ImGui.Text($"Showing first 100 of {this.latestCurrencyCandidates.Count} candidates.");
+                ImGui.Text(this.PluginText.F("debug.showing_first", "Showing first 100 of {0} candidates.", this.latestCurrencyCandidates.Count));
             }
 
             ImGui.End();
@@ -768,22 +776,22 @@ namespace WSCrafter
         {
             if (this.latestCraftingSlots.Count == 0)
             {
-                ImGui.TextWrapped("No selected waystone slots were detected in the visible inventory grid.");
+                ImGui.TextWrapped(this.PluginText.T("debug.no_selected_waystones", "No selected waystone slots were detected in the visible inventory grid."));
                 return;
             }
 
             if (ImGui.BeginTable("WSCrafterWaystoneDebugTable", 10, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | ImGuiTableFlags.ScrollY, new Vector2(0f, 180f)))
             {
-                ImGui.TableSetupColumn("Slot");
-                ImGui.TableSetupColumn("Selected");
-                ImGui.TableSetupColumn("Name");
-                ImGui.TableSetupColumn("Rarity");
-                ImGui.TableSetupColumn("Explicit");
-                ImGui.TableSetupColumn("Corrupted");
-                ImGui.TableSetupColumn("Vaal tried");
-                ImGui.TableSetupColumn("Next");
-                ImGui.TableSetupColumn("Ptr");
-                ImGui.TableSetupColumn("Corrupt evidence");
+                ImGui.TableSetupColumn(this.PluginText.T("debug.col.slot", "Slot"));
+                ImGui.TableSetupColumn(this.PluginText.T("debug.col.selected", "Selected"));
+                ImGui.TableSetupColumn(this.PluginText.T("debug.col.name", "Name"));
+                ImGui.TableSetupColumn(this.PluginText.T("debug.col.rarity", "Rarity"));
+                ImGui.TableSetupColumn(this.PluginText.T("debug.col.explicit", "Explicit"));
+                ImGui.TableSetupColumn(this.PluginText.T("debug.col.corrupted", "Corrupted"));
+                ImGui.TableSetupColumn(this.PluginText.T("debug.col.vaal_tried", "Vaal tried"));
+                ImGui.TableSetupColumn(this.PluginText.T("debug.col.next", "Next"));
+                ImGui.TableSetupColumn(this.PluginText.T("debug.col.ptr", "Ptr"));
+                ImGui.TableSetupColumn(this.PluginText.T("debug.col.corrupt_evidence", "Corrupt evidence"));
                 ImGui.TableHeadersRow();
 
                 foreach (var slot in this.latestCraftingSlots.Take(100))
@@ -796,7 +804,7 @@ namespace WSCrafter
                     ImGui.TableNextColumn();
                     ImGui.Text($"{slot.Slot.Column},{slot.Slot.Row} ({slot.Slot.Index})");
                     ImGui.TableNextColumn();
-                    ImGui.TextColored(selected ? new Vector4(0.35f, 1f, 0.35f, 1f) : new Vector4(1f, 0.35f, 0.35f, 1f), selected ? "yes" : "no");
+                    ImGui.TextColored(selected ? new Vector4(0.35f, 1f, 0.35f, 1f) : new Vector4(1f, 0.35f, 0.35f, 1f), selected ? this.PluginText.T("debug.match_yes", "yes") : this.PluginText.T("debug.match_no", "no"));
                     ImGui.TableNextColumn();
                     ImGui.TextUnformatted(slot.Name);
                     ImGui.TableNextColumn();
@@ -805,9 +813,9 @@ namespace WSCrafter
                     ImGui.Text(slot.ExplicitMods.ToString());
                     ImGui.TableNextColumn();
                     var isCorrupted = this.IsCorrupted(slot.Slot.Item);
-                    ImGui.TextColored(isCorrupted ? new Vector4(0.35f, 1f, 0.35f, 1f) : new Vector4(1f, 0.75f, 0.25f, 1f), isCorrupted ? "yes" : "no");
+                    ImGui.TextColored(isCorrupted ? new Vector4(0.35f, 1f, 0.35f, 1f) : new Vector4(1f, 0.75f, 0.25f, 1f), isCorrupted ? this.PluginText.T("debug.match_yes", "yes") : this.PluginText.T("debug.match_no", "no"));
                     ImGui.TableNextColumn();
-                    ImGui.Text(slot.Slot.Index >= 0 && this.vaalAttemptedSlotIndexes.Contains(slot.Slot.Index) ? "yes" : "no");
+                    ImGui.Text(slot.Slot.Index >= 0 && this.vaalAttemptedSlotIndexes.Contains(slot.Slot.Index) ? this.PluginText.T("debug.match_yes", "yes") : this.PluginText.T("debug.match_no", "no"));
                     ImGui.TableNextColumn();
                     ImGui.TextUnformatted(slot.NextStep);
                     ImGui.TableNextColumn();
@@ -829,7 +837,7 @@ namespace WSCrafter
 
             if (slots.Count == 0)
             {
-                this.latestMemoryScanStatus = "No visible selected waystones to scan.";
+                this.latestMemoryScanStatus = this.PluginText.T("debug.no_visible_scan", "No visible selected waystones to scan.");
                 return;
             }
 
@@ -858,11 +866,11 @@ namespace WSCrafter
                 }
 
                 File.WriteAllText(outputPath, sb.ToString());
-                this.latestMemoryScanStatus = $"Wrote {slots.Count} waystone scan(s) to {outputPath}";
+                this.latestMemoryScanStatus = this.PluginText.F("debug.scan_wrote", "Wrote {0} waystone scan(s) to {1}", slots.Count, outputPath);
             }
             catch (Exception ex)
             {
-                this.latestMemoryScanStatus = $"Memory scan failed: {ex.Message}";
+                this.latestMemoryScanStatus = this.PluginText.F("debug.scan_failed", "Memory scan failed: {0}", ex.Message);
             }
         }
 
@@ -1091,42 +1099,42 @@ namespace WSCrafter
         {
             if (!this.latestCurrencies.TryGetValue(kind, out var slot))
             {
-                ImGui.TextColored(new Vector4(1f, 0.35f, 0.35f, 1f), $"{label}: missing");
+                ImGui.TextColored(new Vector4(1f, 0.35f, 0.35f, 1f), this.PluginText.F("debug.currency_missing", "{0}: missing", label));
                 return;
             }
 
             var name = GetItemNameOrFallback(slot.Item);
             ImGui.TextColored(new Vector4(0.35f, 1f, 0.35f, 1f),
                 $"{label}: found | Name: {name} | Ptr: 0x{slot.ItemPointer.ToInt64():X} | Rect: {slot.Pos.X:0},{slot.Pos.Y:0} {slot.Size.X:0}x{slot.Size.Y:0}");
-            ImGui.TextWrapped($"Path: {slot.Item.Path}");
+            ImGui.TextWrapped(this.PluginText.F("debug.path_line", "Path: {0}", slot.Item.Path));
         }
 
         private bool DrawSelectionControls()
         {
             var changed = false;
 
-            if (ImGui.Button("Clear all"))
+            if (ImGui.Button(this.PluginText.Label("button.clear_all", "Clear all", "WSCrafterClearAll")))
             {
                 Array.Fill(this.Settings.SelectedInventorySlots, false);
                 changed = true;
             }
 
             ImGui.SameLine();
-            if (ImGui.Button("Select all"))
+            if (ImGui.Button(this.PluginText.Label("button.select_all", "Select all", "WSCrafterSelectAll")))
             {
                 Array.Fill(this.Settings.SelectedInventorySlots, true);
                 changed = true;
             }
 
             ImGui.SameLine();
-            if (ImGui.Button("Left 5 columns"))
+            if (ImGui.Button(this.PluginText.Label("button.left_5_columns", "Left 5 columns", "WSCrafterLeft5")))
             {
                 this.SelectColumns(0, 4);
                 changed = true;
             }
 
             ImGui.SameLine();
-            if (ImGui.Button("Right 5 columns"))
+            if (ImGui.Button(this.PluginText.Label("button.right_5_columns", "Right 5 columns", "WSCrafterRight5")))
             {
                 this.SelectColumns(7, 11);
                 changed = true;
@@ -1162,7 +1170,7 @@ namespace WSCrafter
 
                     if (ImGui.IsItemHovered())
                     {
-                        ImGui.SetTooltip($"Column {col}, Row {row}");
+                        ImGui.SetTooltip(this.PluginText.F("tooltip.slot", "Column {0}, Row {1}", col, row));
                     }
 
                     if (col < InventoryColumns - 1)
@@ -1220,7 +1228,7 @@ namespace WSCrafter
             }
 
             var draw = ImGui.GetForegroundDrawList();
-            var text = $"WSCrafter: {this.automationStatus}";
+            var text = this.PluginText.F("status.overlay_line", "WSCrafter: {0}", this.automationStatus);
             var pos = new Vector2(24f, 120f);
             var textSize = ImGui.CalcTextSize(text);
             draw.AddRectFilled(pos - new Vector2(8f, 5f), pos + textSize + new Vector2(8f, 5f), 0xCC000000u, 4f);
@@ -1913,6 +1921,18 @@ namespace WSCrafter
             public int Column => this.Index >= 0 ? this.Index % InventoryColumns : -1;
 
             public Vector2 Center => this.Pos + (this.Size * 0.5f);
+        }
+
+
+        private string LocalizeCurrencyKind(CurrencyKind kind)
+        {
+            return kind switch
+            {
+                CurrencyKind.Alchemy => this.PluginText.T("currency.alchemy", "Alchemy"),
+                CurrencyKind.Exalted => this.PluginText.T("currency.exalted", "Exalted"),
+                CurrencyKind.Vaal => this.PluginText.T("currency.vaal", "Vaal"),
+                _ => kind.ToString(),
+            };
         }
 
         private static class NativeMouse
