@@ -28,12 +28,19 @@ namespace WSCrafter
         private const int InventorySlots = InventoryColumns * InventoryRows;
         private const int DefaultScanStartOffset = 0x20;
         private const int DefaultScanEndOffset = 0x600;
+        private const int KnownItemPointerOffset = 0x4F8;
+        private const long IdleScanIntervalMs = 250;
+        private const long AutomationScanIntervalMs = 100;
+        private const long CurrencyScanIntervalMs = 3000;
 
         private object? handleObj;
         private MethodInfo? readStdWStringMethod;
         private readonly Dictionary<Type, MethodInfo> readMemoryMethods = new();
         private readonly Dictionary<Type, MethodInfo> tryReadMemoryMethods = new();
         private readonly Dictionary<Type, MethodInfo> readStdVectorMethods = new();
+        private readonly Dictionary<IntPtr, int> itemPointerOffsetByElement = new();
+        private readonly Dictionary<CurrencyKind, SlotInfo> cachedCurrencies = new();
+        private readonly List<CurrencyDebugInfo> cachedCurrencyCandidates = new();
 
         private readonly List<CraftingSlot> latestCraftingSlots = new();
         private readonly Dictionary<CurrencyKind, SlotInfo> latestCurrencies = new();
@@ -63,6 +70,13 @@ namespace WSCrafter
         private string automationStatus = "Idle.";
         private readonly HashSet<int> vaalAttemptedSlotIndexes = new();
         private string latestMemoryScanStatus = "No memory scan yet.";
+        private long nextVisibleTargetsUpdateTick;
+        private long nextCurrencyScanTick;
+        private IntPtr cachedCurrencyLeftPanelAddress = IntPtr.Zero;
+        private IntPtr cachedCurrencyRightPanelAddress = IntPtr.Zero;
+        private int cachedLeftPanelItemsScanned;
+        private int cachedRightPanelItemsScanned;
+        private bool forceCurrencyRescan = true;
 
         private string SettingPathname => Path.Join(this.DllDirectory, "config", "settings.txt");
 
@@ -92,6 +106,9 @@ namespace WSCrafter
             this.readMemoryMethods.Clear();
             this.tryReadMemoryMethods.Clear();
             this.readStdVectorMethods.Clear();
+            this.itemPointerOffsetByElement.Clear();
+            this.cachedCurrencies.Clear();
+            this.cachedCurrencyCandidates.Clear();
             this.latestCraftingSlots.Clear();
             this.latestCurrencies.Clear();
             this.latestCurrencyCandidates.Clear();
@@ -192,7 +209,11 @@ namespace WSCrafter
                 return;
             }
 
-            this.UpdateVisibleTargets();
+            if (this.ShouldUpdateVisibleTargets())
+            {
+                this.UpdateVisibleTargets();
+            }
+
             this.UpdateAutomation();
             this.DrawOverlayHighlights();
             this.DrawAutomationStatusOverlay();
@@ -201,6 +222,18 @@ namespace WSCrafter
             {
                 this.DrawDebugWindow();
             }
+        }
+
+        private bool ShouldUpdateVisibleTargets()
+        {
+            var now = Environment.TickCount64;
+            if (now < this.nextVisibleTargetsUpdateTick)
+            {
+                return false;
+            }
+
+            this.nextVisibleTargetsUpdateTick = now + (this.automationActive ? AutomationScanIntervalMs : IdleScanIntervalMs);
+            return true;
         }
 
         private void UpdateVisibleTargets()
@@ -230,25 +263,10 @@ namespace WSCrafter
             this.latestLeftPanelVisible = gameUi.LeftPanel.Address != IntPtr.Zero && this.IsElementVisible(gameUi.LeftPanel.Address);
             this.latestRightPanelVisible = gameUi.RightPanel.Address != IntPtr.Zero && this.IsElementVisible(gameUi.RightPanel.Address);
 
-            if (this.latestLeftPanelVisible)
-            {
-                var leftSlots = this.ScanItemSlots(gameUi.LeftPanel.Address);
-                this.latestLeftPanelItemsScanned = leftSlots.Count;
-                foreach (var slot in leftSlots)
-                {
-                    this.TrackCurrency(slot);
-                }
-            }
+            this.UpdateCurrencyTargets(gameUi);
 
             if (this.latestRightPanelVisible)
             {
-                var rightSlots = this.ScanItemSlots(gameUi.RightPanel.Address);
-                this.latestRightPanelItemsScanned = rightSlots.Count;
-                foreach (var slot in rightSlots)
-                {
-                    this.TrackCurrency(slot);
-                }
-
                 var inventoryRoot = this.ResolveInventoryGridRoot(gameUi.RightPanel.Address);
                 this.latestInventoryGridRoot = inventoryRoot;
                 if (inventoryRoot != IntPtr.Zero)
@@ -274,6 +292,66 @@ namespace WSCrafter
                     this.latestStatus = $"Inventory grid found. Selected waystones: {this.latestCraftingSlots.Count}.";
                 }
             }
+        }
+
+        private void UpdateCurrencyTargets(ImportantUiElements gameUi)
+        {
+            var panelsChanged = this.cachedCurrencyLeftPanelAddress != this.latestLeftPanelAddress ||
+                                this.cachedCurrencyRightPanelAddress != this.latestRightPanelAddress;
+            var now = Environment.TickCount64;
+            if (panelsChanged || this.forceCurrencyRescan || now >= this.nextCurrencyScanTick)
+            {
+                this.RescanCurrencyTargets(gameUi);
+                this.cachedCurrencyLeftPanelAddress = this.latestLeftPanelAddress;
+                this.cachedCurrencyRightPanelAddress = this.latestRightPanelAddress;
+                this.nextCurrencyScanTick = now + CurrencyScanIntervalMs;
+                this.forceCurrencyRescan = false;
+                return;
+            }
+
+            foreach (var pair in this.cachedCurrencies)
+            {
+                this.latestCurrencies[pair.Key] = pair.Value;
+            }
+
+            this.latestCurrencyCandidates.AddRange(this.cachedCurrencyCandidates);
+            this.latestLeftPanelItemsScanned = this.cachedLeftPanelItemsScanned;
+            this.latestRightPanelItemsScanned = this.cachedRightPanelItemsScanned;
+        }
+
+        private void RescanCurrencyTargets(ImportantUiElements gameUi)
+        {
+            this.cachedCurrencies.Clear();
+            this.cachedCurrencyCandidates.Clear();
+
+            if (this.latestLeftPanelVisible)
+            {
+                var leftSlots = this.ScanItemSlots(gameUi.LeftPanel.Address);
+                this.latestLeftPanelItemsScanned = leftSlots.Count;
+                foreach (var slot in leftSlots)
+                {
+                    this.TrackCurrency(slot);
+                }
+            }
+
+            if (this.latestRightPanelVisible)
+            {
+                var rightSlots = this.ScanItemSlots(gameUi.RightPanel.Address);
+                this.latestRightPanelItemsScanned = rightSlots.Count;
+                foreach (var slot in rightSlots)
+                {
+                    this.TrackCurrency(slot);
+                }
+            }
+
+            foreach (var pair in this.latestCurrencies)
+            {
+                this.cachedCurrencies[pair.Key] = pair.Value;
+            }
+
+            this.cachedCurrencyCandidates.AddRange(this.latestCurrencyCandidates);
+            this.cachedLeftPanelItemsScanned = this.latestLeftPanelItemsScanned;
+            this.cachedRightPanelItemsScanned = this.latestRightPanelItemsScanned;
         }
 
         private IntPtr ResolveInventoryGridRoot(IntPtr rightPanel)
@@ -370,6 +448,7 @@ namespace WSCrafter
             this.automationPhase = AutomationPhase.PrepareStep;
             this.automationActionsSent = 0;
             this.vaalAttemptedSlotIndexes.Clear();
+            this.forceCurrencyRescan = true;
             this.nextAutomationActionAt = DateTime.Now.AddSeconds(this.Settings.AutomationStartDelaySeconds);
             this.HideSettingsWindow();
             NativeMouse.FocusWindow(this.TryGetGameWindowHandle());
@@ -426,6 +505,7 @@ namespace WSCrafter
                 case AutomationPhase.RightClickCurrency:
                     NativeMouse.RightClick(this.pendingCurrencyCenter);
                     this.automationStatus = $"Selected {this.pendingCurrencyKind}.";
+                    this.forceCurrencyRescan = true;
                     this.automationPhase = AutomationPhase.LeftClickWaystone;
                     this.nextAutomationActionAt = now.AddMilliseconds(this.Settings.AutomationClickDelayMs);
                     break;
@@ -1319,10 +1399,29 @@ namespace WSCrafter
                 return IntPtr.Zero;
             }
 
+            if (this.TryReadMemory<IntPtr>(elementAddr + KnownItemPointerOffset, out var knownOffsetCandidate) &&
+                this.IsValidItemEntity(knownOffsetCandidate))
+            {
+                this.itemPointerOffsetByElement[elementAddr] = KnownItemPointerOffset;
+                return knownOffsetCandidate;
+            }
+
+            if (this.itemPointerOffsetByElement.TryGetValue(elementAddr, out var cachedOffset))
+            {
+                if (this.TryReadMemory<IntPtr>(elementAddr + cachedOffset, out var cachedCandidate) &&
+                    this.IsValidItemEntity(cachedCandidate))
+                {
+                    return cachedCandidate;
+                }
+
+                this.itemPointerOffsetByElement.Remove(elementAddr);
+            }
+
             for (var offset = DefaultScanStartOffset; offset + 8 <= DefaultScanEndOffset; offset += 8)
             {
                 if (this.TryReadMemory<IntPtr>(elementAddr + offset, out var candidate) && this.IsValidItemEntity(candidate))
                 {
+                    this.itemPointerOffsetByElement[elementAddr] = offset;
                     return candidate;
                 }
             }

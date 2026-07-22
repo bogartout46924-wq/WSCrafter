@@ -16,11 +16,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\GameHelper\GameHelper.csproj">
+    <ProjectReference Include="..\GameHelper2\GameHelper\GameHelper.csproj">
       <Private>false</Private>
       <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
     </ProjectReference>
-    <ProjectReference Include="..\..\GameOffsets\GameOffsets.csproj">
+    <ProjectReference Include="..\GameHelper2\GameOffsets\GameOffsets.csproj">
       <Private>false</Private>
       <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
     </ProjectReference>
@@ -31,9 +31,9 @@
       <_WSCrafterDeployFiles Include="$(OutDir)$(TargetName)$(TargetExt);$(OutDir)$(TargetName).pdb" />
     </ItemGroup>
     <Copy SourceFiles="@(_WSCrafterDeployFiles)"
-          DestinationFolder="..\..\GameHelper\$(OutDir)Plugins\$(ProjectName)"
+          DestinationFolder="..\GameHelper2\GameHelper\$(OutDir)Plugins\$(ProjectName)"
           SkipUnchangedFiles="true"
-          Condition="Exists('..\..\GameHelper\$(OutDir)')" />
+          Condition="Exists('..\GameHelper2\GameHelper\$(OutDir)')" />
   </Target>
 
 </Project>
