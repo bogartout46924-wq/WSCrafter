@@ -108,5 +108,12 @@
   "debug.path_line": "路徑：{0}",
   "debug.scan_wrote": "已寫入 {0} 筆換界石掃描到 {1}",
   "debug.scan_failed": "記憶體掃描失敗：{0}",
-  "debug.currency_missing": "{0}：缺少"
+  "debug.currency_missing": "{0}：缺少",
+  "status.waiting_window_area": "等待：遊戲視窗區域尚未就緒。",
+  "status.invalid_client_position": "已停止：客戶端 UI 座標無效。",
+  "debug.window_area_missing": "WindowArea：不可用",
+  "debug.window_area": "WindowArea（螢幕）：L={0} T={1} W={2} H={3}",
+  "debug.pending_currency_coords": "待點擊通貨 client={0:0},{1:0} screen={2:0},{3:0}",
+  "debug.pending_waystone_coords": "待點擊換界石 client={0:0},{1:0} screen={2:0},{3:0}",
+  "debug.sample_alchemy_coords": "煉金石樣例 client={0:0},{1:0} screen={2:0},{3:0}"
 }

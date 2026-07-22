@@ -2,6 +2,7 @@ namespace WSCrafter
 {
     using System;
     using System.Collections.Generic;
+    using System.Drawing;
     using System.IO;
     using System.Linq;
     using System.Numerics;
@@ -58,8 +59,10 @@ namespace WSCrafter
         private AutomationPhase automationPhase = AutomationPhase.Idle;
         private DateTime nextAutomationActionAt = DateTime.MinValue;
         private CurrencyKind pendingCurrencyKind;
-        private Vector2 pendingCurrencyCenter;
-        private Vector2 pendingWaystoneCenter;
+        // Client-relative centers (same space as overlay / UiElement positions).
+        // Converted to screen coordinates via Core.Process.WindowArea immediately before click.
+        private Vector2 pendingCurrencyCenterClient;
+        private Vector2 pendingWaystoneCenterClient;
         private int pendingWaystoneSlotIndex = -1;
         private int pendingWaystoneColumn = -1;
         private int pendingWaystoneRow = -1;
@@ -198,12 +201,20 @@ namespace WSCrafter
                 return;
             }
 
+            // Keep the emergency abort hotkey live even if the overlay is about to hide.
             if (this.automationActive && NativeMouse.IsKeyDown((int)this.Settings.AutomationAbortKey))
             {
                 this.StopAutomation(this.PluginText.F("status.emergency_stopped", "Emergency stopped by {0}.", this.Settings.AutomationAbortKey));
             }
 
             if (Core.States.GameCurrentState != GameStateTypes.InGameState)
+            {
+                return;
+            }
+
+            // Hide highlights/debug and pause per-frame scan/automation when the game is not active.
+            // Automation already requires Core.Process.Foreground before sending clicks.
+            if (!Core.Process.Foreground)
             {
                 return;
             }
@@ -511,7 +522,12 @@ namespace WSCrafter
                     break;
 
                 case AutomationPhase.RightClickCurrency:
-                    NativeMouse.RightClick(this.pendingCurrencyCenter);
+                    if (!this.TryClickClientPosition(this.pendingCurrencyCenterClient, rightClick: true, out var currencyClickReason))
+                    {
+                        this.StopAutomation(currencyClickReason);
+                        return;
+                    }
+
                     this.automationStatus = this.PluginText.F("status.selected_currency", "Selected {0}.", this.LocalizeCurrencyKind(this.pendingCurrencyKind));
                     this.forceCurrencyRescan = true;
                     this.automationPhase = AutomationPhase.LeftClickWaystone;
@@ -519,7 +535,12 @@ namespace WSCrafter
                     break;
 
                 case AutomationPhase.LeftClickWaystone:
-                    NativeMouse.LeftClick(this.pendingWaystoneCenter);
+                    if (!this.TryClickClientPosition(this.pendingWaystoneCenterClient, rightClick: false, out var waystoneClickReason))
+                    {
+                        this.StopAutomation(waystoneClickReason);
+                        return;
+                    }
+
                     this.automationActionsSent++;
                     this.automationStatus = this.PluginText.F("status.applied_waiting", "Applied {0}. Waiting for item update...", this.LocalizeCurrencyKind(this.pendingCurrencyKind));
                     this.automationPhase = AutomationPhase.WaitForItemUpdate;
@@ -570,6 +591,12 @@ namespace WSCrafter
             if (!Core.Process.Foreground)
             {
                 reason = this.PluginText.T("status.waiting_focus", "Waiting: focus the Path of Exile window.");
+                return false;
+            }
+
+            if (!this.TryGetGameWindowArea(out _))
+            {
+                reason = this.PluginText.T("status.waiting_window_area", "Waiting: game window area is not ready.");
                 return false;
             }
 
@@ -630,6 +657,107 @@ namespace WSCrafter
             return IntPtr.Zero;
         }
 
+        /// <summary>
+        ///     Game UI positions (PluginUiElementReflection / UiElement.Position) are client-relative,
+        ///     matching overlay draw space. Host refreshes <see cref="GameProcess.WindowArea"/> from
+        ///     GetClientRect + ClientToScreen; use that origin for SetCursorPos screen coordinates.
+        ///     Same contract as ItemMove's MoveController.
+        /// </summary>
+        private bool TryGetGameWindowArea(out Rectangle windowArea)
+        {
+            windowArea = Core.Process.WindowArea;
+            return windowArea.Width > 0 && windowArea.Height > 0;
+        }
+
+        private bool TryClientToScreen(Vector2 clientPosition, out Vector2 screenPosition, out string reason)
+        {
+            screenPosition = Vector2.Zero;
+            if (!this.TryGetGameWindowArea(out var windowArea))
+            {
+                reason = this.PluginText.T("status.waiting_window_area", "Waiting: game window area is not ready.");
+                return false;
+            }
+
+            if (!float.IsFinite(clientPosition.X) || !float.IsFinite(clientPosition.Y))
+            {
+                reason = this.PluginText.T("status.invalid_client_position", "Stopped: invalid client UI position.");
+                return false;
+            }
+
+            screenPosition = new Vector2(windowArea.Left + clientPosition.X, windowArea.Top + clientPosition.Y);
+            reason = string.Empty;
+            return true;
+        }
+
+        private bool TryClickClientPosition(Vector2 clientPosition, bool rightClick, out string reason)
+        {
+            if (!this.TryClientToScreen(clientPosition, out var screenPosition, out reason))
+            {
+                return false;
+            }
+
+            if (rightClick)
+            {
+                NativeMouse.RightClick(screenPosition);
+            }
+            else
+            {
+                NativeMouse.LeftClick(screenPosition);
+            }
+
+            reason = string.Empty;
+            return true;
+        }
+
+        private void DrawDebugWindowArea()
+        {
+            if (!this.TryGetGameWindowArea(out var windowArea))
+            {
+                ImGui.Text(this.PluginText.T("debug.window_area_missing", "WindowArea: unavailable"));
+                return;
+            }
+
+            ImGui.Text(this.PluginText.F(
+                "debug.window_area",
+                "WindowArea (screen): L={0} T={1} W={2} H={3}",
+                windowArea.Left,
+                windowArea.Top,
+                windowArea.Width,
+                windowArea.Height));
+
+            if (this.pendingCurrencyCenterClient != Vector2.Zero || this.pendingWaystoneCenterClient != Vector2.Zero)
+            {
+                this.TryClientToScreen(this.pendingCurrencyCenterClient, out var currencyScreen, out _);
+                this.TryClientToScreen(this.pendingWaystoneCenterClient, out var waystoneScreen, out _);
+                ImGui.Text(this.PluginText.F(
+                    "debug.pending_currency_coords",
+                    "Pending currency client={0:0},{1:0} screen={2:0},{3:0}",
+                    this.pendingCurrencyCenterClient.X,
+                    this.pendingCurrencyCenterClient.Y,
+                    currencyScreen.X,
+                    currencyScreen.Y));
+                ImGui.Text(this.PluginText.F(
+                    "debug.pending_waystone_coords",
+                    "Pending waystone client={0:0},{1:0} screen={2:0},{3:0}",
+                    this.pendingWaystoneCenterClient.X,
+                    this.pendingWaystoneCenterClient.Y,
+                    waystoneScreen.X,
+                    waystoneScreen.Y));
+            }
+
+            if (this.latestCurrencies.TryGetValue(CurrencyKind.Alchemy, out var alchemy))
+            {
+                this.TryClientToScreen(alchemy.Center, out var alchemyScreen, out _);
+                ImGui.Text(this.PluginText.F(
+                    "debug.sample_alchemy_coords",
+                    "Alchemy sample client={0:0},{1:0} screen={2:0},{3:0}",
+                    alchemy.Center.X,
+                    alchemy.Center.Y,
+                    alchemyScreen.X,
+                    alchemyScreen.Y));
+            }
+        }
+
         private bool TryPrepareNextCraftAction(out string reason)
         {
             var target = this.latestCraftingSlots
@@ -658,8 +786,8 @@ namespace WSCrafter
             }
 
             this.pendingCurrencyKind = currencyKind;
-            this.pendingCurrencyCenter = currencySlot.Center;
-            this.pendingWaystoneCenter = target.Slot.Center;
+            this.pendingCurrencyCenterClient = currencySlot.Center;
+            this.pendingWaystoneCenterClient = target.Slot.Center;
             this.pendingWaystoneSlotIndex = target.Slot.Index;
             this.pendingWaystoneColumn = target.Slot.Column;
             this.pendingWaystoneRow = target.Slot.Row;
@@ -705,6 +833,7 @@ namespace WSCrafter
             ImGui.Text(this.PluginText.F("debug.right_panel", "RightPanel: 0x{0:X} | Visible: {1} | Items scanned: {2}", this.latestRightPanelAddress.ToInt64(), this.latestRightPanelVisible, this.latestRightPanelItemsScanned));
             ImGui.Text(this.PluginText.F("debug.inventory_grid", "InventoryGridRoot: 0x{0:X}", this.latestInventoryGridRoot.ToInt64()));
             ImGui.Text(this.PluginText.F("debug.planner_status", "Planner status: {0}", this.latestStatus));
+            this.DrawDebugWindowArea();
 
             ImGui.SeparatorText(this.PluginText.T("debug.target_currency", "Target Currency Detection"));
             this.DrawDebugCurrencyTarget(CurrencyKind.Alchemy, this.PluginText.T("currency.alchemy", "Alchemy"));

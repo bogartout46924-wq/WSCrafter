@@ -11,6 +11,7 @@ Fork of [Ionic28/WSCrafter](https://github.com/Ionic28/WSCrafter), adapted for t
 - Exalt rare waystones to a target explicit mod count
 - Optional final Vaal step
 - Overlay highlights, emergency stop key, and debug tools
+- Click automation uses `Core.Process.WindowArea` to convert game-client UI positions to screen coordinates (aligned with ItemMove)
 - 11-language UI localization
 
 ## Display names

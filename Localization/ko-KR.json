@@ -108,5 +108,12 @@
   "debug.path_line": "경로: {0}",
   "debug.scan_wrote": "{0}개 경로석 스캔을 {1}에 기록",
   "debug.scan_failed": "메모리 스캔 실패: {0}",
-  "debug.currency_missing": "{0}: 없음"
+  "debug.currency_missing": "{0}: 없음",
+  "status.waiting_window_area": "Waiting: game window area is not ready.",
+  "status.invalid_client_position": "Stopped: invalid client UI position.",
+  "debug.window_area_missing": "WindowArea: unavailable",
+  "debug.window_area": "WindowArea (screen): L={0} T={1} W={2} H={3}",
+  "debug.pending_currency_coords": "Pending currency client={0:0},{1:0} screen={2:0},{3:0}",
+  "debug.pending_waystone_coords": "Pending waystone client={0:0},{1:0} screen={2:0},{3:0}",
+  "debug.sample_alchemy_coords": "Alchemy sample client={0:0},{1:0} screen={2:0},{3:0}"
 }

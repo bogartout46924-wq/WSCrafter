@@ -108,5 +108,12 @@
   "debug.path_line": "パス：{0}",
   "debug.scan_wrote": "{0} 件のウェイストーンスキャンを {1} に書き込み",
   "debug.scan_failed": "メモリスキャン失敗：{0}",
-  "debug.currency_missing": "{0}: なし"
+  "debug.currency_missing": "{0}: なし",
+  "status.waiting_window_area": "Waiting: game window area is not ready.",
+  "status.invalid_client_position": "Stopped: invalid client UI position.",
+  "debug.window_area_missing": "WindowArea: unavailable",
+  "debug.window_area": "WindowArea (screen): L={0} T={1} W={2} H={3}",
+  "debug.pending_currency_coords": "Pending currency client={0:0},{1:0} screen={2:0},{3:0}",
+  "debug.pending_waystone_coords": "Pending waystone client={0:0},{1:0} screen={2:0},{3:0}",
+  "debug.sample_alchemy_coords": "Alchemy sample client={0:0},{1:0} screen={2:0},{3:0}"
 }
